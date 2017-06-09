@@ -11,14 +11,17 @@ env MYSQL_SERVER=
 env MYSQL_USER=
 env MYSQL_USER_PASSWORD=
 env MYSQL_ROOT_PASSWORD=
-env TIMEZONE=America/Sao_Paulo
 
-RUN useradd -d /seafile -M -s /bin/bash -c "Seafile User" seafile \
-  && mkdir -p /opt/seafile /cloud \
-  && curl -sL $(curl -sL https://www.seafile.com/en/download/ \
-    | grep -oE 'https://.*seafile-server.*x86-64.tar.gz'|sort -r|head -1) \
+RUN mkdir -p /opt/seafile /cloud /seafile \
+  && useradd -d /seafile -M -s /bin/bash -c "Seafile User" seafile \
+  && ls -lld /seafile \
+  && id seafile
+
+RUN echo $(curl -sL https://download.seafile.com/d/6e5297246c/?p=/pro&mode=list) \
+	 | grep -oE 'seafile-pro-server_6.*x86-64_Ubuntu.tar.gz&dl=1' |sort -r|head -1 > /tmp/dl \
+  && curl -L https://download.seafile.com$(sed -n 's/.*href="\([^"]*\).*/\1/p' /tmp/dl) \
     | tar -C /opt/seafile/ -xz \
-  && chown -R seafile:seafile /cloud /opt/seafile \
+  && chown -R seafile:seafile /cloud /opt/seafile /seafile \
   && ls -l /opt/seafile/seafile*-server*/
 
 RUN DEBIAN_FRONTEND=noninteractive apt-get update \

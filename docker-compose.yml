@@ -9,9 +9,9 @@ services:
         MYSQL_ROOT_PASSWORD: seaf.rootdb
 
     seafile-ce:
-      image: infraops/seafile
+      image: infraops/seafile:pro
       restart: always
-      container_name: seafile-ce
+      container_name: seafile-pro
       depends_on:
       - seaf-db
       environment:
