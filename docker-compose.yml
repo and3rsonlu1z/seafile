@@ -1,0 +1,32 @@
+version: '2'
+
+services:
+    seaf-db:
+      container_name: seaf-db
+      image: mariadb
+      restart: always
+      environment:
+        MYSQL_ROOT_PASSWORD: seaf.rootdb
+
+    seafile-ce:
+      image: infraops/seafile
+      restart: always
+      container_name: seafile-ce
+      depends_on:
+      - seaf-db
+      environment:
+        - SEAFILE_NAME=cloud
+        - SEAFILE_ADDRESS=cloud.exemple.com
+        - SEAFILE_ADMIN=seafile@exemple.com
+        - SEAFILE_ADMIN_PW=admin
+        - MYSQL_SERVER=seaf-db
+        - MYSQL_USER=seafile
+        - MYSQL_USER_PASSWORD=seafile
+        - MYSQL_ROOT_PASSWORD=seaf.rootdb
+        - FASTCGI=true
+      links:
+        - "seaf-db:seaf-db"
+      ports:
+        - 8000:8000
+        - 8081:8081
+        - 8082:8082
