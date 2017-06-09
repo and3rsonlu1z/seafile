@@ -1,4 +1,4 @@
-FROM infraops/debian:java7
+FROM infraops/debian
 MAINTAINER anderson@infraops.info
 
 env FASTCGI=false
