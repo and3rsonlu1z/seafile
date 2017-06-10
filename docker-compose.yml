@@ -26,6 +26,8 @@ services:
         - FASTCGI=true
       links:
         - "seaf-db:seaf-db"
+      volumes:
+        - /opt/cloud:/cloud
       ports:
         - 8000:8000
         - 8081:8081
