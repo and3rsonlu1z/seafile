@@ -17,7 +17,7 @@ RUN mkdir -p /opt/seafile /cloud /seafile \
   && ls -lld /seafile \
   && id seafile
 
-RUN echo $(curl -sL https://download.seafile.com/d/6e5297246c/?p=/pro&mode=list) \
+RUN echo $(curl -sL https://download.seafile.com/d/6e5297246c/?p=/pro/beta&mode=list) \
     | grep -oE 'seafile-pro-server_6.*x86-64.tar.gz&dl=1' |sort -r|head -1 > /tmp/dl \ 
   && curl -L https://download.seafile.com$(sed -n 's/.*href="\([^"]*\).*/\1/p' /tmp/dl) \
     | tar -C /opt/seafile/ -xz \
