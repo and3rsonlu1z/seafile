@@ -18,7 +18,7 @@ RUN mkdir -p /opt/seafile /cloud /seafile \
   && id seafile
   
 RUN curl -sL $(curl -sL https://www.seafile.com/en/download/ \
-    | grep -oE 'https://.*seafile-server.*x86-64.tar.gz'|sort -r|head -1) \
+    | grep -oE 'https://.*seafile-server_6.0.9_x86-64.tar.gz'|sort -r|head -1) \
     | tar -C /opt/seafile/ -xz \
   && chown -R seafile:seafile /cloud /opt/seafile /seafile \
   && ls -l /opt/seafile/seafile*-server*/
