@@ -9,7 +9,7 @@ services:
         MYSQL_ROOT_PASSWORD: seaf.rootdb
 
     seafile-ce:
-      image: infraops/seafile:pro
+      image: infraops/seafile-pro
       restart: always
       container_name: seafile-pro
       depends_on:
@@ -26,6 +26,8 @@ services:
         - FASTCGI=true
       links:
         - "seaf-db:seaf-db"
+      volumes:
+        - /opt/cloud:/cloud
       ports:
         - 8000:8000
         - 8081:8081

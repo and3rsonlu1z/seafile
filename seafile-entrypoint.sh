@@ -6,6 +6,8 @@ set -o pipefail
 BASEPATH=${BASEPATH:-"/opt/seafile"}
 INSTALLPATH=${INSTALLPATH:-"${BASEPATH}/$(ls -1 ${BASEPATH} | grep -E '^seafile-[pro-server]+')"}
 SEAHUB=${SEAHUB:-"${INSTALLPATH}/seahub"}
+SEAFILE=${SEAFILE:-"$(echo $INSTALLPATH | grep -oE 'seafile-[pro-server]+')"}
+SEAHUB_EXT=${SEAHUB_EXT:-}
 DATADIR=${DATADIR:-"/cloud"}
 
 trapped() {
@@ -15,7 +17,7 @@ trapped() {
 
 autorun() {
   # If there's an existing seafile config, link the dirs
-  move_and_link
+  move_and_link 
   # Needed to check the return code
   set +e
   control_seafile "start"
@@ -30,7 +32,10 @@ autorun() {
   then
     exit 1
   fi
+
   setup_custom
+  seafile_version
+  
   control_seahub "${SEAHUB_START}"
   keep_in_foreground
 }
@@ -38,7 +43,7 @@ autorun() {
 run_only() {
   local SH_DB_DIR="${DATADIR}/${SEAHUB_DB_DIR}"
   # Linking must always be done
-  link_files "${SH_DB_DIR}"
+  #link_files "${SH_DB_DIR}"
   control_seafile "start"
   control_seahub "${SEAHUB_START}"
   keep_in_foreground
@@ -63,8 +68,12 @@ setup_mysql() {
   echo "setup_mysql"
 
   # Wait for MySQL to boot up
-  DOCKERIZE_TIMEOUT=${DOCKERIZE_TIMEOUT:-"60s"}
-  dockerize -timeout ${DOCKERIZE_TIMEOUT} -wait tcp://${MYSQL_SERVER}:${MYSQL_PORT:-3306}
+  #DOCKERIZE_TIMEOUT=${DOCKERIZE_TIMEOUT:-"60s"}
+  #dockerize -timeout ${DOCKERIZE_TIMEOUT} -wait tcp://${MYSQL_SERVER}:${MYSQL_PORT:-3306}
+  
+  while ! mysqladmin ping -h ${MYSQL_SERVER} --silent; do
+    sleep 1
+  done
 
   set +u
   OPTIONAL_PARMS="$([ -n "${MYSQL_ROOT_PASSWORD}" ] && printf '%s' "-r ${MYSQL_ROOT_PASSWORD}")"
@@ -111,20 +120,32 @@ setup_seahub() {
 }
 
 setup_custom() {
-  echo 'preparando ambiente para customização...'
+  echo '### preparando seahub-data custom... ###'
   for SEAMEDIA in "avatars" "custom"
   do
-    rm -rf ${INSTALLPATH}/seahub/media/${SEAMEDIA}
-	if [ ! -e "${DATADIR}/seahub-data/${SEAMEDIA}" ]
+	if [ ! -d "${DATADIR}/seahub-data/${SEAMEDIA}" ]
 	then 
-	  mkdir ${DATADIR}/seahub-data/${SEAMEDIA}
+	  echo '### [CUSTOM CONF] seahub-data dir [ '${SEAMEDIA}' ] ###'
+	  mkdir -p ${DATADIR}/seahub-data/${SEAMEDIA}
+	  chown -R seafile:seafile ${DATADIR}/seahub-data/${SEAMEDIA}
+	  # debug
+	  ls -ld ${DATADIR}/seahub-data
+      echo '========='
+      ls -lA ${DATADIR}/seahub-data
+      echo
 	fi
-	echo 'criando link para sistema --> seahub-data / ' ${SEAMEDIA}
-    ln -sf ../../seahub-data/${SEAMEDIA} ${DATADIR}/seahub/media
+	rm -rf ${DATADIR}/${SEAHUB_EXT}/media/${SEAMEDIA}
+     
+    if [ ! -h "${SEAHUB}/media/${SEAMEDIA}" ]
+    then
+      echo '### [CUSTOM CONF] links para [ '${SEAMEDIA}' ] ###'
+      ln -sf ../../seahub-data/${SEAMEDIA} ${DATADIR}/${SEAHUB_EXT}/media
+      echo '========='
+    fi
   done
 
-  ls -ld ${INSTALLPATH}/seahub/media
-  ls -l ${INSTALLPATH}/seahub/media	
+  ls -ld ${SEAHUB}/media
+  ls -l ${SEAHUB}/media	
 }
 
 move_and_link() {
@@ -145,21 +166,40 @@ move_files() {
   do
     if [ -e "${BASEPATH}/${SEADIR}" -a ! -L "${BASEPATH}/${SEADIR}" ]
     then
-      echo 'copiando seafile config para volume --> ' ${SEADIR} 
+      echo '### [CONF FILES] populando volume dir [ '${SEADIR}' ] ###'
+      echo '========='
+      echo
+      
       cp -a ${BASEPATH}/${SEADIR} ${DATADIR}
 
       rm -rf "${BASEPATH}/${SEADIR}"
     fi
   done
   
-  if [ -e "${SEAHUB}" -a ! -L "${SEAHUB}" ]
+  if [ -d "${SEAHUB}" -a ! -L "${SEAHUB}" ]
   then
-    if [ ! -e ${DATADIR}/seahub ]
+    if [ ! -d ${DATADIR}/${SEAHUB_EXT} ]
     then
-      mkdir -p ${DATADIR}/seahub
-      cp -a ${SEAHUB} ${DATADIR}
+      if [ "${SEAFILE}" == "seafile-ce" ]
+	  then
+	    echo '### [SEAHUB FILES] populando volume dir [ '${SEAHUB_EXT}' ] ###'
+        echo '========='
+        
+        cp -a ${SEAHUB} ${DATADIR}/${SEAHUB_EXT}
+      else
+        echo '### [SEAHUB FILES] populando volume dir [ '${SEAHUB_EXT}' ] ###'
+        echo '========='
+
+        cp -a ${SEAHUB} ${DATADIR}/${SEAHUB_EXT}
+      fi
+    else
+      if [ ${DATADIR}/${SEAHUB_EXT} == "seahub-ce" -a ${SEAFILE} != "seafile-ce" ]
+      then
+        echo 'seahub incompatível! copiando versão para ' ${SEAFILE}
+        cp -a ${SEAHUB} ${DATADIR}/${SEAHUB_EXT}
+      fi 
     fi
-  rm -rf ${SEAHUB}
+    rm -rf ${SEAHUB}
   fi
 
   if [ -e "${BASEPATH}/seahub.db" -a ! -L "${BASEPATH}/seahub.db" ]
@@ -171,21 +211,29 @@ move_files() {
 link_files() {
   for SEADIR in "ccnet" "conf" "seafile-data" "seahub-data"
   do
-    if [ -e "${DATADIR}/${SEADIR}" ]
+    if [ -d "${DATADIR}/${SEADIR}" ]
     then
-      # ls for debugging reasons
-      ls -ld ${DATADIR}/${SEADIR}
-      ls -lA ${DATADIR}/${SEADIR}
-      
-      echo 'criando link para sistema --> ' ${SEADIR} 
-      ln -sf ${DATADIR}/${SEADIR} ${BASEPATH}/${SEADIR}
+      if [ ! -h "${BASEPATH}/${SEADIR}" ]
+      then
+        echo '### [CONF] links para [ '${SEADIR}' ] ###'
+        # ls for debugging reasons
+        ls -ld ${DATADIR}/${SEADIR}
+        echo '========='
+        ln -sf ${DATADIR}/${SEADIR} ${BASEPATH}/${SEADIR}
+        ls -lA ${DATADIR}/${SEADIR}
+        echo
+      fi
     fi
   done
   
-  if [ -e "${DATADIR}/seahub" ] 
+  if [ -d "${DATADIR}/${SEAHUB_EXT}" ] 
   then
-    echo 'criando links para sistema --> seahub' 
-    ln -sf ${DATADIR}/seahub ${INSTALLPATH}
+    if [ ! -h "${SEAHUB}" ]
+    then
+      echo '### [CONF] link para' ${DATADIR}/${SEAHUB_EXT} ' --> ' ${SEAHUB}
+      ln -sf ${DATADIR}/${SEAHUB_EXT} ${SEAHUB}
+      ls -lA ${INSTALLPATH}
+    fi
   fi
   
   if [ -h ${BASEPATH}/seafile-server-latest ]
@@ -197,6 +245,9 @@ link_files() {
   then
     ln -s ${1}/seahub.db ${BASEPATH}/seahub.db
   fi
+echo '========='
+ls -lA ${BASEPATH}
+echo
 }
 
 keep_in_foreground() {
@@ -257,6 +308,16 @@ control_seahub() {
   return ${RET}
 }
 
+seafile_version() {
+if [ ${SEAFILE} != "seafile-pro" ]
+then
+  SEAFILE=${SEAFILE:-"seafile-ce"}
+  SEAHUB_EXT=${SEAHUB_EXT:-"seahub-ce"}
+else
+  SEAHUB_EXT=${SEAHUB_EXT:-"seahub-pro"} 
+fi
+}
+
 SEAHUB_START=${SEAHUB_START:-}
 FASTCGI=${FASTCGI:-}
 if [[ $FASTCGI =~ [Tt]rue ]]
@@ -279,6 +340,7 @@ SEAFILE_DATA_DIR=${SEAFILE_DATA_DIR:-"${DATADIR}/seafile-data"}
 SEAFILE_PORT=${SEAFILE_PORT:-8082}
 SEAHUB_DB_DIR=${SEAHUB_DB_DIR:-}
 
+seafile_version
 prepare_env
 
 trap trapped SIGINT SIGTERM
